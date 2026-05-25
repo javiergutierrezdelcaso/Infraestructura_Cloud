@@ -1,0 +1,18 @@
+# terraform.tfvars — NO subir al repo (está en .gitignore)
+# Copia este archivo, rellena los valores y úsalo en local o en Terraform Cloud
+# como variables del workspace (tipo "Sensitive" para los secretos).
+
+environment    = "pre"
+project_name   = "tfg"
+location       = "West Europe"
+vm_size        = "Standard_B1s"
+admin_username = "azureuser"
+
+# Pega el contenido de tu clave pública SSH:  cat ~/.ssh/id_ed25519.pub
+ssh_public_key = "ssh-ed25519 AAAAC3... tu_email@ejemplo.com"
+
+# Tu IP pública actual: https://whatismyip.com
+allowed_ssh_ip = "XX.XX.XX.XX/32"
+
+# Nombre único global para el Key Vault (3-24 caracteres, solo letras, números y guiones)
+key_vault_name = "kv-tfg-pre-XXXX"

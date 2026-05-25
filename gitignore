@@ -1,0 +1,27 @@
+# Archivos locales de Terraform — NUNCA subir al repo
+.terraform/
+.terraform.lock.hcl
+terraform.tfstate
+terraform.tfstate.backup
+*.tfstate
+*.tfstate.*
+
+# Variables con valores reales (contienen secretos e IPs)
+*.tfvars
+*.tfvars.json
+
+# Archivos de override locales
+override.tf
+override.tf.json
+*_override.tf
+*_override.tf.json
+
+# Archivo de credenciales de CLI
+.terraformrc
+terraform.rc
+
+# Claves SSH generadas localmente
+*.pem
+*.key
+id_rsa*
+id_ed25519*
