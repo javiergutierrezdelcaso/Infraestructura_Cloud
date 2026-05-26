@@ -1,0 +1,17 @@
+---
+# Playbook principal — configura la VM para ejecutar el microservicio FastAPI
+# Uso: ansible-playbook -i inventory.ini playbook.yml
+
+- name: Configurar VM para microservicio FastAPI
+  hosts: vm_pre          # Cambiar a vm_pro para producción
+  become: true           # Ejecutar como sudo
+  gather_facts: true
+
+  vars:
+    app_user: azureuser
+    app_dir: /opt/microservicio
+    app_port: 8000
+    python_version: python3
+
+  roles:
+    - microservicio
