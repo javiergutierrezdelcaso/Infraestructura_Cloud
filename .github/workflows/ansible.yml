@@ -1,0 +1,118 @@
+name: Ansible — Configurar VM
+
+on:
+  push:
+    branches:
+      - develop
+      - main
+
+jobs:
+  ansible:
+    name: Configurar VM ${{ github.ref_name == 'main' && 'PRO' || 'PRE' }}
+    runs-on: ubuntu-latest
+    environment: ${{ github.ref_name == 'main' && 'pro' || 'pre' }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # Determina el workspace de Terraform Cloud según la rama
+      - name: Determinar entorno
+        id: entorno
+        run: |
+          if [ "${{ github.ref_name }}" == "main" ]; then
+            echo "nombre=PRO" >> $GITHUB_OUTPUT
+            echo "workspace=Infraestructura_Pro" >> $GITHUB_OUTPUT
+          else
+            echo "nombre=PRE" >> $GITHUB_OUTPUT
+            echo "workspace=Infraestructura_Pre" >> $GITHUB_OUTPUT
+          fi
+
+      # NUEVO PASO: Esperar a que Terraform Cloud termine de aplicar los cambios
+      - name: Esperar a que Terraform Cloud termine (Apply)
+        id: wait_tf
+        run: |
+          echo "Obteniendo ID del Workspace..."
+          WORKSPACE_ID=$(curl -s \
+            --header "Authorization: Bearer ${{ secrets.TF_API_TOKEN }}" \
+            --header "Content-Type: application/vnd.api+json" \
+            "https://app.terraform.io/api/v2/organizations/${{ vars.TF_ORGANIZATION }}/workspaces/${{ steps.entorno.outputs.workspace }}" \
+            | jq -r '.data.id')
+
+          echo "Monitoreando ejecuciones activas en Terraform Cloud..."
+          while true; do
+            # Obtenemos el estado del último "Run"
+            RUN_STATUS=$(curl -s \
+              --header "Authorization: Bearer ${{ secrets.TF_API_TOKEN }}" \
+              --header "Content-Type: application/vnd.api+json" \
+              "https://app.terraform.io/api/v2/workspaces/${WORKSPACE_ID}/runs?page%5Bsize%5D=1" \
+              | jq -r '.data[0].attributes.status')
+
+            echo "Estado actual del Run en Terraform Cloud: ${RUN_STATUS}"
+
+            # Si terminó correctamente, rompemos el bucle
+            if [ "${RUN_STATUS}" == "applied" ] || [ "${RUN_STATUS}" == "planned_and_finished" ]; then
+              echo "¡Terraform Cloud ha terminado con éxito!"
+              break
+            # Si falló o se canceló, abortamos el pipeline de GitHub Actions
+            elif [ "${RUN_STATUS}" == "errored" ] || [ "${RUN_STATUS}" == "canceled" ]; then
+              echo "Error: El run de Terraform Cloud falló o fue cancelado."
+              exit 1
+            fi
+
+            echo "Esperando 20 segundos antes de volver a comprobar..."
+            sleep 20
+          done
+
+      # Obtiene la IP (Ahora seguro de que la VM ya existe)
+      - name: Obtener IP de VM desde Terraform Cloud
+        id: tf_output
+        run: |
+          WORKSPACE_ID=$(curl -s \
+            --header "Authorization: Bearer ${{ secrets.TF_API_TOKEN }}" \
+            --header "Content-Type: application/vnd.api+json" \
+            "https://app.terraform.io/api/v2/organizations/${{ vars.TF_ORGANIZATION }}/workspaces/${{ steps.entorno.outputs.workspace }}" \
+            | jq -r '.data.id')
+
+          VM_IP=$(curl -s \
+            --header "Authorization: Bearer ${{ secrets.TF_API_TOKEN }}" \
+            --header "Content-Type: application/vnd.api+json" \
+            "https://app.terraform.io/api/v2/workspaces/${WORKSPACE_ID}/current-state-version-outputs" \
+            | jq -r '.data[] | select(.attributes.name == "vm_public_ip") | .attributes.value' | tr -d '"')
+
+          if [ -z "${VM_IP}" ] || [ "${VM_IP}" == "null" ]; then
+            echo "Error: No se pudo obtener la IP de la VM."
+            exit 1
+          fi
+
+          echo "vm_ip=${VM_IP}" >> $GITHUB_OUTPUT
+          echo "IP de VM ${{ steps.entorno.outputs.nombre }}: ${VM_IP}"
+
+      # Paso extra de resiliencia: Esperar a que el puerto SSH de Azure responda
+      - name: Esperar a que el puerto SSH (22) esté abierto
+        run: |
+          echo "Esperando a que la VM levante el servicio SSH..."
+          timeout 120 bash -c 'until echo > /dev/tcp/${{ steps.tf_output.outputs.vm_ip }}/22; do sleep 5; done' || true
+
+      - name: Instalar Ansible
+        run: sudo apt-get update && sudo apt-get install -y ansible
+
+      - name: Configurar clave SSH
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/id_rsa_tfg
+          chmod 600 ~/.ssh/id_rsa_tfg
+          ssh-keyscan -H ${{ steps.tf_output.outputs.vm_ip }} >> ~/.ssh/known_hosts 2>/dev/null
+
+      - name: Crear inventario dinámico
+        run: |
+          mkdir -p ansible
+          cat > ansible/inventory_ci.ini << EOF2
+          [vm_target]
+          ${{ steps.tf_output.outputs.vm_ip }} ansible_user=azureuser ansible_ssh_private_key_file=~/.ssh/id_rsa_tfg ansible_python_interpreter=/usr/bin/python3
+          EOF2
+
+      - name: Ejecutar playbook Ansible en ${{ steps.entorno.outputs.nombre }}
+        run: |
+          ANSIBLE_HOST_KEY_CHECKING=False ansible-playbook -i ansible/inventory_ci.ini ansible/playbook.yml \
+            -e "app_user=azureuser app_dir=/opt/microservicio app_port=8000"
