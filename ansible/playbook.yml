@@ -3,7 +3,7 @@
 # Uso: ansible-playbook -i inventory.ini playbook.yml
 
 - name: Configurar VM para microservicio FastAPI
-  hosts: vm_pre          # Cambiar a vm_pro para producción
+  hosts: all          # Cambiar a vm_pro para producción
   become: true           # Ejecutar como sudo
   gather_facts: true
 
