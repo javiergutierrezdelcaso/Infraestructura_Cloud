@@ -1,42 +1,30 @@
-name: Ansible — Configurar VM
+name: Ansible — Configurar VM PRO
 
 on:
   push:
     branches:
-      - develop
       - main
 
 jobs:
-  ansible:
-    name: Configurar VM ${{ github.ref_name == 'main' && 'PRO' || 'PRE' }}
+  ansible-pro:
+    name: Configurar VM PRO con Ansible
     runs-on: ubuntu-latest
-    # Si la rama es main usa el entorno pro, si es develop usa pre
-    environment: ${{ github.ref_name == 'main' && 'pro' || 'pre' }}
+    environment: pro
 
     steps:
-      - name: Checkout
+      - name: Checkout rama main
         uses: actions/checkout@v4
+        with:
+          ref: main
 
-      # Determina el workspace de Terraform Cloud según la rama
-      - name: Determinar entorno
-        id: entorno
-        run: |
-          if [ "${{ github.ref_name }}" == "main" ]; then
-            echo "nombre=PRO" >> $GITHUB_OUTPUT
-            echo "workspace=Infraestructura_Pro" >> $GITHUB_OUTPUT
-          else
-            echo "nombre=PRE" >> $GITHUB_OUTPUT
-            echo "workspace=Infraestructura_Pre" >> $GITHUB_OUTPUT
-          fi
-
-      # Obtiene la IP del output vm_public_ip de Terraform Cloud
-      - name: Obtener IP de VM desde Terraform Cloud
+      # Obtiene la IP pública directamente del output de Terraform Cloud
+      - name: Obtener IP de VM PRO desde Terraform Cloud
         id: tf_output
         run: |
           WORKSPACE_ID=$(curl -s \
             --header "Authorization: Bearer ${{ secrets.TF_API_TOKEN }}" \
             --header "Content-Type: application/vnd.api+json" \
-            "https://app.terraform.io/api/v2/organizations/${{ vars.TF_ORGANIZATION }}/workspaces/${{ steps.entorno.outputs.workspace }}" \
+            "https://app.terraform.io/api/v2/organizations/${{ vars.TF_ORGANIZATION }}/workspaces/Infraestructura_Pro" \
             | jq -r '.data.id')
 
           VM_IP=$(curl -s \
@@ -46,7 +34,7 @@ jobs:
             | jq -r '.data[] | select(.attributes.name == "vm_public_ip") | .attributes.value')
 
           echo "vm_ip=${VM_IP}" >> $GITHUB_OUTPUT
-          echo "IP de VM ${{ steps.entorno.outputs.nombre }}: ${VM_IP}"
+          echo "IP obtenida: ${VM_IP}"
 
       - name: Instalar Ansible
         run: sudo apt-get update && sudo apt-get install -y ansible
@@ -61,11 +49,12 @@ jobs:
       - name: Crear inventario dinámico
         run: |
           cat > ansible/inventory_ci.ini << EOF2
-          [vm_target]
+          [vm_pro]
           ${{ steps.tf_output.outputs.vm_ip }} ansible_user=azureuser ansible_ssh_private_key_file=~/.ssh/id_rsa_tfg ansible_python_interpreter=/usr/bin/python3
           EOF2
 
-      - name: Ejecutar playbook Ansible en ${{ steps.entorno.outputs.nombre }}
+      - name: Ejecutar playbook Ansible
         run: |
           ansible-playbook -i ansible/inventory_ci.ini ansible/playbook.yml \
-            -e "app_user=azureuser app_dir=/opt/microservicio app_port=8000"
+            -e "app_user=azureuser app_dir=/opt/microservicio app_port=8000" \
+            --limit vm_pro
