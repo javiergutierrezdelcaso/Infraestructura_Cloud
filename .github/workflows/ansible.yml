@@ -16,6 +16,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      # 1. Determinar entorno según rama
       - name: Determinar entorno
         id: entorno
         run: |
@@ -27,7 +28,42 @@ jobs:
             echo "workspace=Infraestructura_Pre" >> $GITHUB_OUTPUT
           fi
 
-      - name: Obtener IP desde Terraform Cloud
+      # 2. Esperar a que Terraform Cloud termine el apply
+      #    (Ansible y Terraform se disparan a la vez con el mismo push)
+      - name: Esperar a que Terraform Cloud termine el apply
+        run: |
+          echo "Obteniendo ID del workspace..."
+          WORKSPACE_ID=$(curl -s \
+            --header "Authorization: Bearer ${{ secrets.TF_API_TOKEN }}" \
+            --header "Content-Type: application/vnd.api+json" \
+            "https://app.terraform.io/api/v2/organizations/${{ vars.TF_ORGANIZATION }}/workspaces/${{ steps.entorno.outputs.workspace }}" \
+            | jq -r '.data.id')
+
+          echo "Monitorizando el run activo en Terraform Cloud..."
+          for i in $(seq 1 30); do
+            RUN_STATUS=$(curl -s \
+              --header "Authorization: Bearer ${{ secrets.TF_API_TOKEN }}" \
+              --header "Content-Type: application/vnd.api+json" \
+              "https://app.terraform.io/api/v2/workspaces/${WORKSPACE_ID}/runs?page%5Bsize%5D=1" \
+              | jq -r '.data[0].attributes.status')
+
+            echo "Intento ${i}/30 — Estado Terraform: ${RUN_STATUS}"
+
+            if [ "${RUN_STATUS}" == "applied" ] || \
+               [ "${RUN_STATUS}" == "planned_and_finished" ]; then
+              echo "Terraform ha terminado con éxito."
+              break
+            elif [ "${RUN_STATUS}" == "errored" ] || \
+                 [ "${RUN_STATUS}" == "canceled" ]; then
+              echo "Error: el run de Terraform falló o fue cancelado."
+              exit 1
+            fi
+
+            sleep 20
+          done
+
+      # 3. Obtener IP desde los outputs de Terraform Cloud
+      - name: Obtener IP de la VM desde Terraform Cloud
         id: tf_output
         run: |
           WORKSPACE_ID=$(curl -s \
@@ -40,30 +76,58 @@ jobs:
             --header "Authorization: Bearer ${{ secrets.TF_API_TOKEN }}" \
             --header "Content-Type: application/vnd.api+json" \
             "https://app.terraform.io/api/v2/workspaces/${WORKSPACE_ID}/current-state-version-outputs" \
-            | jq -r '.data[] | select(.attributes.name == "vm_public_ip") | .attributes.value')
+            | jq -r '.data[] | select(.attributes.name == "vm_public_ip") | .attributes.value' \
+            | tr -d '"')
+
+          if [ -z "${VM_IP}" ] || [ "${VM_IP}" == "null" ]; then
+            echo "Error: no se pudo obtener la IP de la VM."
+            exit 1
+          fi
 
           echo "vm_ip=${VM_IP}" >> $GITHUB_OUTPUT
           echo "IP de VM ${{ steps.entorno.outputs.nombre }}: ${VM_IP}"
 
+      # 4. Esperar a que el puerto SSH esté disponible en la VM
+      - name: Esperar a que el puerto SSH (22) responda
+        run: |
+          echo "Esperando a que la VM exponga el puerto 22..."
+          timeout 180 bash -c \
+            'until echo > /dev/tcp/${{ steps.tf_output.outputs.vm_ip }}/22; \
+             do echo "Puerto 22 no disponible, reintentando en 5s..."; \
+             sleep 5; done'
+          echo "Puerto 22 disponible."
+
+      # 5. Instalar Ansible
       - name: Instalar Ansible
         run: sudo apt-get update && sudo apt-get install -y ansible
 
+      # 6. Configurar clave SSH y known_hosts
       - name: Configurar clave SSH
         run: |
           mkdir -p ~/.ssh
           echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/id_rsa_tfg
           chmod 600 ~/.ssh/id_rsa_tfg
-          ssh-keyscan -H ${{ steps.tf_output.outputs.vm_ip }} >> ~/.ssh/known_hosts
+          ssh-keyscan -H ${{ steps.tf_output.outputs.vm_ip }} \
+            >> ~/.ssh/known_hosts 2>/dev/null
+          echo "known_hosts configurado."
 
+      # 7. Crear inventario dinámico con la IP descubierta
       - name: Crear inventario dinámico
         run: |
+          mkdir -p ansible
           cat > ansible/inventory_ci.ini << EOF2
           [vm_target]
-          ${{ steps.tf_output.outputs.vm_ip }} ansible_user=azureuser ansible_ssh_private_key_file=~/.ssh/id_rsa_tfg ansible_python_interpreter=/usr/bin/python3
+          ${{ steps.tf_output.outputs.vm_ip }} \
+            ansible_user=azureuser \
+            ansible_ssh_private_key_file=~/.ssh/id_rsa_tfg \
+            ansible_python_interpreter=/usr/bin/python3
           EOF2
+          echo "Inventario creado para IP: ${{ steps.tf_output.outputs.vm_ip }}"
 
-      - name: Ejecutar playbook Ansible
+      # 8. Ejecutar playbook — pasa entorno_tipo para el badge PRE/PRO
+      - name: Ejecutar playbook Ansible en ${{ steps.entorno.outputs.nombre }}
         run: |
+          ANSIBLE_HOST_KEY_CHECKING=False \
           ansible-playbook -i ansible/inventory_ci.ini ansible/playbook.yml \
             -e "app_user=azureuser \
                 app_dir=/opt/microservicio \
