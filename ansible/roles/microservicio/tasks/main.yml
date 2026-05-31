@@ -1,10 +1,4 @@
 ---
-# Tareas del rol "microservicio"
-# Instala dependencias y prepara la VM para ejecutar FastAPI como servicio systemd
-
-# ─────────────────────────────────────────────
-# 1. Actualizar paquetes del sistema
-# ─────────────────────────────────────────────
 - name: Actualizar lista de paquetes
   ansible.builtin.apt:
     update_cache: true
@@ -20,9 +14,6 @@
       - curl
     state: present
 
-# ─────────────────────────────────────────────
-# 2. Crear directorio de la aplicación
-# ─────────────────────────────────────────────
 - name: Crear directorio de la aplicación
   ansible.builtin.file:
     path: "{{ app_dir }}"
@@ -31,42 +22,33 @@
     group: "{{ app_user }}"
     mode: "0755"
 
-# ─────────────────────────────────────────────
-# 3. Crear entorno virtual Python
-# ─────────────────────────────────────────────
-- name: Crear entorno virtual Python en {{ app_dir }}
+- name: Crear entorno virtual Python
   ansible.builtin.command:
     cmd: python3 -m venv {{ app_dir }}/venv
     creates: "{{ app_dir }}/venv"
   become_user: "{{ app_user }}"
 
-# ─────────────────────────────────────────────
-# 4. Instalar dependencias Python (FastAPI + Uvicorn)
-# ─────────────────────────────────────────────
-- name: Instalar FastAPI y Uvicorn en el entorno virtual
+- name: Instalar FastAPI y Uvicorn
   ansible.builtin.pip:
     name:
       - fastapi
-      - uvicorn[standard]
+      - "uvicorn[standard]"
     virtualenv: "{{ app_dir }}/venv"
     state: present
 
-# ─────────────────────────────────────────────
-# 5. Crear servicio systemd para el microservicio
-#    Permite que FastAPI arranque automáticamente con la VM
-# ─────────────────────────────────────────────
-- name: Crear archivo de servicio systemd
+- name: Crear servicio systemd con variable ENTORNO
   ansible.builtin.copy:
     dest: /etc/systemd/system/microservicio.service
     mode: "0644"
     content: |
       [Unit]
-      Description=Microservicio FastAPI TFG
+      Description=EcoAnalyzer — Microservicio FastAPI TFG
       After=network.target
 
       [Service]
       User={{ app_user }}
       WorkingDirectory={{ app_dir }}
+      Environment=ENTORNO={{ entorno_tipo }}
       ExecStart={{ app_dir }}/venv/bin/uvicorn main:app --host 0.0.0.0 --port {{ app_port }}
       Restart=always
       RestartSec=5
@@ -80,7 +62,7 @@
   ansible.builtin.systemd:
     daemon_reload: true
 
-- name: Habilitar servicio microservicio al arranque
+- name: Habilitar y arrancar servicio
   ansible.builtin.systemd:
     name: microservicio
     enabled: true
