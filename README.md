@@ -7,7 +7,7 @@ Gestiona el aprovisionamiento automatizado de recursos en **Microsoft Azure**
 mediante **Terraform** y la configuración de servidores mediante **Ansible**, 
 integrados en pipelines CI/CD que se disparan automáticamente con cada cambio en el repositorio.
 
-![Ansible](https://github.com/javiergutierrezdelcaso/tfg-infraestructura-azure-terraform/actions/workflows/ansible.yml/badge.svg)
+
 ---
 
 ## Arquitectura
