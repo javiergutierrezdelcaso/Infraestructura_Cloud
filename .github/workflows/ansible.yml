@@ -22,10 +22,10 @@ jobs:
         run: |
           if [ "${{ github.ref_name }}" == "main" ]; then
             echo "nombre=PRO" >> $GITHUB_OUTPUT
-            echo "workspace=Infraestructura_Pro" >> $GITHUB_OUTPUT
+            echo "workspace=TFG-Infraestructura-Azure-Terraform-PRO" >> $GITHUB_OUTPUT
           else
             echo "nombre=PRE" >> $GITHUB_OUTPUT
-            echo "workspace=Infraestructura_Pre" >> $GITHUB_OUTPUT
+            echo "workspace=TFG-Infraestructura-Azure-Terraform-PRE" >> $GITHUB_OUTPUT
           fi
 
       # 2. Esperar a que Terraform Cloud termine el apply
