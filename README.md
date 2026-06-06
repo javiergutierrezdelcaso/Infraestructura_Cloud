@@ -9,7 +9,7 @@ integrados en pipelines CI/CD que se disparan automáticamente con cada cambio e
 
 ---
 
-## 📐 Arquitectura
+## Arquitectura
 
 ```
 GitHub (push/PR)
@@ -25,7 +25,7 @@ GitHub (push/PR)
 
 ---
 
-## 🌿 Entornos
+## Entornos
 
 | Entorno | Rama | Workspace Terraform Cloud | Resource Group |
 |---|---|---|---|
@@ -34,7 +34,7 @@ GitHub (push/PR)
 
 ---
 
-## 📁 Estructura del repositorio
+## Estructura del repositorio
 
 ```
 Infraestructura_Cloud/
@@ -55,7 +55,7 @@ Infraestructura_Cloud/
 
 ---
 
-## ⚙️ Recursos aprovisionados por Terraform
+## Recursos aprovisionados por Terraform
 
 | Recurso | Nombre (PRE / PRO) |
 |---|---|
@@ -72,7 +72,7 @@ El NSG permite tráfico entrante en el **puerto 22** (SSH) y **puerto 8000** (Fa
 
 ---
 
-## 🔄 Pipelines CI/CD
+## Pipelines CI/CD
 
 ### CI — Plan especulativo (Pull Request)
 
@@ -101,7 +101,7 @@ desde **Azure CLI** y ejecuta el playbook que:
 
 ---
 
-## 🔐 Secretos y variables necesarios
+## Secretos y variables necesarios
 
 ### En Terraform Cloud (por workspace)
 
@@ -143,7 +143,7 @@ desde **Azure CLI** y ejecuta el playbook que:
 
 ---
 
-## 🚀 Primer despliegue
+## Primer despliegue
 
 ### 1. Clonar el repositorio
 ```bash
@@ -176,7 +176,7 @@ Terraform Cloud desplegará la infraestructura de PRE automáticamente.
 
 ---
 
-## 📋 Requisitos previos
+## Requisitos previos
 
 - Cuenta en [GitHub](https://github.com)
 - Cuenta en [Terraform Cloud](https://app.terraform.io)
@@ -185,7 +185,7 @@ Terraform Cloud desplegará la infraestructura de PRE automáticamente.
 
 ---
 
-## 📚 Referencias
+## Referencias
 
 - [Terraform Azure Provider](https://registry.terraform.io/providers/hashicorp/azurerm/latest/docs)
 - [Terraform Cloud VCS Provider](https://developer.hashicorp.com/terraform/cloud-docs/vcs/github-app)
