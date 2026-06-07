@@ -34,7 +34,7 @@ jobs:
             echo "workspace=TFG-Infraestructura-Azure-Terraform-PRE" >> $GITHUB_OUTPUT
           fi
 
-      # 2. Conectar con la API de Terraform Cloud y descargar el JSON del Plan
+      # 2. Conectar con la API de Terraform Cloud, esperar al Plan definitivo y descargarlo
       - name: Descargar Plan de Terraform Cloud
         id: tf_cloud
         run: |
@@ -50,16 +50,28 @@ jobs:
             exit 1
           fi
 
-          echo "Buscando el último run generado..."
-          RUN_DATA=$(curl -s \
-            --header "Authorization: Bearer ${{ secrets.TF_API_TOKEN }}" \
-            --header "Content-Type: application/vnd.api+json" \
-            "https://app.terraform.io/api/v2/workspaces/${WORKSPACE_ID}/runs?page%5Bsize%5D=1")
-          
-          PLAN_ID=$(echo "$RUN_DATA" | jq -r '.data[0].relationships.plan.data.id')
+          echo "Esperando a que el Plan de Terraform Cloud esté listo..."
+          for i in $(seq 1 15); do
+            RUN_DATA=$(curl -s \
+              --header "Authorization: Bearer ${{ secrets.TF_API_TOKEN }}" \
+              --header "Content-Type: application/vnd.api+json" \
+              "https://app.terraform.io/api/v2/workspaces/${WORKSPACE_ID}/runs?page%5Bsize%5D=1")
+            
+            RUN_STATUS=$(echo "$RUN_DATA" | jq -r '.data[0].attributes.status')
+            PLAN_ID=$(echo "$RUN_DATA" | jq -r '.data[0].relationships.plan.data.id')
+            
+            echo "Intento ${i}/15 — Estado actual en TF Cloud: ${RUN_STATUS}"
+
+            # Esperamos a que el estado sea 'planned' o 'planned_and_finished' para asegurarnos que tiene los recursos
+            if [ "${RUN_STATUS}" == "planned" ] || [ "${RUN_STATUS}" == "planned_and_finished" ] || [ "${RUN_STATUS}" == "applied" ]; then
+               echo "¡Plan detectado y listo!"
+               break
+            fi
+            sleep 10
+          done
 
           if [ -z "$PLAN_ID" ] || [ "$PLAN_ID" == "null" ]; then
-            echo "Error: No hay ningún plan disponible."
+            echo "Error: No se pudo obtener un Plan ID válido de Terraform Cloud."
             exit 1
           fi
 
@@ -74,18 +86,18 @@ jobs:
         with:
           api-key: ${{ secrets.INFRACOST_API_KEY }}
 
-      # 4. Procesar el plan de TF Cloud directo a JSON de Infracost y mostrarlo en consola
+      # 4. Procesar el plan y mostrarlo corregido en la consola
       - name: Mostrar costes en consola
         run: |
           echo "===================================================================="
           echo "   💰 ESTIMACIÓN DE COSTES REALES EN AZURE - ENTORNO: [${{ steps.entorno.outputs.nombre }}] "
           echo "===================================================================="
           
-          # Generamos el JSON final analizando el JSON que nos ha escupido Terraform Cloud
+          # 1. Convierte el plan de Terraform Cloud a formato JSON de Infracost
           infracost breakdown --path tfplan.json --format json --out-file /tmp/infracost.json
           
-          # Lo pintamos bonito en el log de la consola
-          infracost breakdown --path /tmp/infracost.json
+          # 2. CORRECCIÓN: Para imprimir un JSON ya generado en formato tabla, usamos 'output'
+          infracost output --path /tmp/infracost.json --format table
 
       # 5. Publicar o actualizar el comentario en la Pull Request
       - name: Post Infracost comment
