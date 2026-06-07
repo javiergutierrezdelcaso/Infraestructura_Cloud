@@ -5,7 +5,7 @@ on:
     branches:
       - develop
       - main
-      - 'feature/**'  # Se dispara también en ramas feature
+      - 'feature/**'
 
 jobs:
   infracost:
@@ -28,10 +28,8 @@ jobs:
           
           if [ "$TARGET_BRANCH" == "main" ]; then
             echo "entorno=PRO" >> $GITHUB_OUTPUT
-            echo "badge=production" >> $GITHUB_OUTPUT
           else
             echo "entorno=PRE" >> $GITHUB_OUTPUT
-            echo "badge=staging" >> $GITHUB_OUTPUT
           fi
 
       # 2. Instalar y configurar el CLI de Infracost
@@ -41,7 +39,6 @@ jobs:
           api-key: ${{ secrets.INFRACOST_API_KEY }}
 
       # 3. Generar el desglose de costes en formato JSON
-      # (He añadido variables simuladas para que no te salte el WARN de antes)
       - name: Generate Infracost JSON
         run: |
           infracost breakdown --path . \
@@ -50,14 +47,16 @@ jobs:
                               --terraform-var allowed_ssh_ip="0.0.0.0/0" \
                               --terraform-var key_vault_name="kv-tfg-${{ steps.entorno_finops.outputs.entorno }}-01"
 
-      # 4. Publicar el comentario personalizado con el Entorno en el título
+      # 4. Publicar el comentario usando los flags nativos y correctos del CLI
       - name: Post Infracost comment
         env:
           INFRACOST_API_KEY: ${{ secrets.INFRACOST_API_KEY }}
         run: |
+          echo "### 💰 Reporte FinOps: Entorno [${{ steps.entorno_finops.outputs.entorno }}] ###"
+          
           infracost comment github --path /tmp/infracost.json \
                                    --repo ${{ github.repository }} \
                                    --pull-request ${{ github.event.pull_request.number }} \
                                    --github-token ${{ secrets.GITHUB_TOKEN }} \
-                                   --header-label "Costes para el Entorno: [${{ steps.entorno_finops.outputs.entorno }}]" \
+                                   --tag "infracost-${{ steps.entorno_finops.outputs.entorno }}" \
                                    --behavior update
