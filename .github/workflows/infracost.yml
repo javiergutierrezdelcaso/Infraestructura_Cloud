@@ -5,6 +5,7 @@ on:
     branches:
       - develop
       - main
+      - 'feature/**'  # Se dispara también en ramas feature
 
 jobs:
   infracost:
@@ -12,23 +13,44 @@ jobs:
     runs-on: ubuntu-latest
 
     permissions:
-      pull-requests: write # Obligatorio para que el token pueda escribir el comentario
+      pull-requests: write
 
     steps:
       - name: Checkout código
         uses: actions/checkout@v4
 
-      # 1. Instalar y configurar el CLI de Infracost
+      # 1. Determinar el entorno según la rama destino de la Pull Request
+      - name: Determinar Entorno FinOps
+        id: entorno_finops
+        run: |
+          TARGET_BRANCH="${{ github.base_ref }}"
+          echo "La rama destino de la PR es: $TARGET_BRANCH"
+          
+          if [ "$TARGET_BRANCH" == "main" ]; then
+            echo "entorno=PRO" >> $GITHUB_OUTPUT
+            echo "badge=production" >> $GITHUB_OUTPUT
+          else
+            echo "entorno=PRE" >> $GITHUB_OUTPUT
+            echo "badge=staging" >> $GITHUB_OUTPUT
+          fi
+
+      # 2. Instalar y configurar el CLI de Infracost
       - name: Setup Infracost
         uses: infracost/actions/setup@v3
         with:
           api-key: ${{ secrets.INFRACOST_API_KEY }}
 
-      # 2. Generar el desglose de costes en formato JSON
+      # 3. Generar el desglose de costes en formato JSON
+      # (He añadido variables simuladas para que no te salte el WARN de antes)
       - name: Generate Infracost JSON
-        run: infracost breakdown --path . --format json --out-file /tmp/infracost.json
+        run: |
+          infracost breakdown --path . \
+                              --format json \
+                              --out-file /tmp/infracost.json \
+                              --terraform-var allowed_ssh_ip="0.0.0.0/0" \
+                              --terraform-var key_vault_name="kv-tfg-${{ steps.entorno_finops.outputs.entorno }}-01"
 
-     # 3. Publicar el comentario usando directamente el CLI nativo con su flag obligatorio
+      # 4. Publicar el comentario personalizado con el Entorno en el título
       - name: Post Infracost comment
         env:
           INFRACOST_API_KEY: ${{ secrets.INFRACOST_API_KEY }}
@@ -37,4 +59,5 @@ jobs:
                                    --repo ${{ github.repository }} \
                                    --pull-request ${{ github.event.pull_request.number }} \
                                    --github-token ${{ secrets.GITHUB_TOKEN }} \
+                                   --header-label "Costes para el Entorno: [${{ steps.entorno_finops.outputs.entorno }}]" \
                                    --behavior update
