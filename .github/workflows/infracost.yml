@@ -15,20 +15,19 @@ jobs:
       - name: Checkout código
         uses: actions/checkout@v4
 
-      # Instala Infracost de manera oficial
+      # 1. Configurar Infracost CLI
       - name: Setup Infracost
         uses: infracost/actions/setup@v3
         with:
           api-key: ${{ secrets.INFRACOST_API_KEY }}
 
-      # Genera el desglose leyendo tus archivos .tf locales 
-      # (Infracost se salta los bloques de backend de Terraform Cloud para calcular el coste estimativo)
+      # 2. Generar el desglose de costes en formato JSON
       - name: Generate Infracost JSON
-        run: Infracost breakdown --path . --format json --out-file /tmp/infracost.json
+        run: infracost breakdown --path . --format json --out-file /tmp/infracost.json
 
-      # Publica el coste directamente como un comentario en la Pull Request de GitHub
+      # 3. Publicar el comentario en la Pull Request (Ruta corregida)
       - name: Post Infracost comment
         uses: infracost/actions/comment@v3
         with:
           path: /tmp/infracost.json
-          behavior: update # Actualiza el comentario si subes más commits a la PR
+          behavior: update
