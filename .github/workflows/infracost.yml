@@ -1,4 +1,4 @@
-name: Infracost — Previsión de Costes
+name: FinOps — Control de Costes Azure
 
 on:
   pull_request:
@@ -8,55 +8,96 @@ on:
       - 'feature/**'
 
 jobs:
-  infracost:
-    name: Infracost
+  infracost_tfc:
+    name: Analizar Costes ${{ github.base_ref == 'main' && 'PRO' || 'PRE' }}
     runs-on: ubuntu-latest
 
     permissions:
-      pull-requests: write
+      pull-requests: write # Obligatorio para comentar en la PR
 
     steps:
       - name: Checkout código
         uses: actions/checkout@v4
 
-      # 1. Determinar el entorno según la rama destino de la Pull Request
-      - name: Determinar Entorno FinOps
-        id: entorno_finops
+      # 1. Determinar el workspace de Terraform Cloud según la rama destino
+      - name: Determinar Entorno
+        id: entorno
         run: |
           TARGET_BRANCH="${{ github.base_ref }}"
-          echo "La rama destino de la PR es: $TARGET_BRANCH"
+          echo "Rama destino: $TARGET_BRANCH"
           
           if [ "$TARGET_BRANCH" == "main" ]; then
-            echo "entorno=PRO" >> $GITHUB_OUTPUT
+            echo "nombre=PRO" >> $GITHUB_OUTPUT
+            echo "workspace=TFG-Infraestructura-Azure-Terraform-PRO" >> $GITHUB_OUTPUT
           else
-            echo "entorno=PRE" >> $GITHUB_OUTPUT
+            echo "nombre=PRE" >> $GITHUB_OUTPUT
+            echo "workspace=TFG-Infraestructura-Azure-Terraform-PRE" >> $GITHUB_OUTPUT
           fi
 
-      # 2. Instalar y configurar el CLI de Infracost
+      # 2. Conectar con la API de Terraform Cloud y descargar el JSON del Plan
+      - name: Descargar Plan de Terraform Cloud
+        id: tf_cloud
+        run: |
+          echo "Conectando con Terraform Cloud..."
+          WORKSPACE_ID=$(curl -s \
+            --header "Authorization: Bearer ${{ secrets.TF_API_TOKEN }}" \
+            --header "Content-Type: application/vnd.api+json" \
+            "https://app.terraform.io/api/v2/organizations/${{ vars.TF_ORGANIZATION }}/workspaces/${{ steps.entorno.outputs.workspace }}" \
+            | jq -r '.data.id')
+
+          if [ -z "$WORKSPACE_ID" ] || [ "$WORKSPACE_ID" == "null" ]; then
+            echo "Error: No se encontró el Workspace ID en Terraform Cloud."
+            exit 1
+          fi
+
+          echo "Buscando el último run/plan generado..."
+          RUN_DATA=$(curl -s \
+            --header "Authorization: Bearer ${{ secrets.TF_API_TOKEN }}" \
+            --header "Content-Type: application/vnd.api+json" \
+            "https://app.terraform.io/api/v2/workspaces/${WORKSPACE_ID}/runs?page%5Bsize%5D=1")
+          
+          RUN_STATUS=$(echo "$RUN_DATA" | jq -r '.data[0].attributes.status')
+          PLAN_ID=$(echo "$RUN_DATA" | jq -r '.data[0].relationships.plan.data.id')
+
+          echo "Estado actual en Terraform Cloud: ${RUN_STATUS}"
+
+          if [ -z "$PLAN_ID" ] || [ "$PLAN_ID" == "null" ]; then
+            echo "Error: No hay ningún plan disponible para descargar. Asegúrate de que Terraform Cloud haya iniciado el run."
+            exit 1
+          fi
+
+          echo "Descargando salida JSON del Plan..."
+          curl -s -L \
+            --header "Authorization: Bearer ${{ secrets.TF_API_TOKEN }}" \
+            "https://app.terraform.io/api/v2/plans/${PLAN_ID}/json-output" > tfplan.json
+
+      # 3. Configurar el CLI de Infracost
       - name: Setup Infracost
         uses: infracost/actions/setup@v3
         with:
           api-key: ${{ secrets.INFRACOST_API_KEY }}
 
-      # 3. Generar el desglose de costes en formato JSON
-      - name: Generate Infracost JSON
+      # 4. Procesar el archivo de Terraform Cloud e imprimirlo en consola de manera visual
+      - name: Mostrar costes en consola
         run: |
-          infracost breakdown --path . \
-                              --format json \
-                              --out-file /tmp/infracost.json \
-                              --terraform-var allowed_ssh_ip="0.0.0.0/0" \
-                              --terraform-var key_vault_name="kv-tfg-${{ steps.entorno_finops.outputs.entorno }}-01"
+          echo "===================================================================="
+          echo "   💰 ESTIMACIÓN DE COSTES REALES EN AZURE - ENTORNO: [${{ steps.entorno.outputs.nombre }}] "
+          echo "===================================================================="
+          
+          # Convierte el plan de TFC a formato Infracost JSON
+          infracost breakdown --path tfplan.json --format json --out-file /tmp/infracost.json
+          
+          # Lo imprime bonito con colores en la pantalla negra de GitHub
+          infracost breakdown --path /tmp/infracost.json
 
-      # 4. Publicar el comentario usando los flags nativos y correctos del CLI
+      # 5. Publicar o actualizar el comentario en la Pull Request
       - name: Post Infracost comment
         env:
           INFRACOST_API_KEY: ${{ secrets.INFRACOST_API_KEY }}
         run: |
-          echo "### 💰 Reporte FinOps: Entorno [${{ steps.entorno_finops.outputs.entorno }}] ###"
-          
           infracost comment github --path /tmp/infracost.json \
                                    --repo ${{ github.repository }} \
                                    --pull-request ${{ github.event.pull_request.number }} \
                                    --github-token ${{ secrets.GITHUB_TOKEN }} \
-                                   --tag "infracost-${{ steps.entorno_finops.outputs.entorno }}" \
+                                   --tag "infracost-${{ steps.entorno.outputs.nombre }}" \
                                    --behavior update
