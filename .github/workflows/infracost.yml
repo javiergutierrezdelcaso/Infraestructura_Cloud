@@ -73,26 +73,25 @@ jobs:
           echo ""
           
           TOTAL_COST=$(jq -r '.totalMonthlyCost // "0.00"' /tmp/infracost.json)
-          echo "COSTE TOTAL ESTIMADO: \$$TOTAL_COST / mes"
+          echo "COSTE TOTAL ESTIMADO: \$${TOTAL_COST} / mes"
           echo ""
           echo "--------------------------------------------------------------------"
           echo "RECURSOS DE PAGO DETECTADOS (GENERAN COSTE):"
           echo "--------------------------------------------------------------------"
           
-          # Filtrar y parsear los recursos que valen más de $0
-          jq -r '.projects[0].breakdown.resources[] | select((.monthlyCost | tonumber) > 0) | "• \(.name)\n  └─ Coste Mensual: \$\(.monthlyCost)\n  └─ Componentes:\n" + (.costComponents[] | "     - \(.name): \$\(.monthlyCost) (\(.unit))")' /tmp/infracost.json || echo "Ninguno."
+          # Filtrado sin escapes conflictivos para Bash
+          jq -r '.projects[0].breakdown.resources[] | select((.monthlyCost | tonumber) > 0) | "• \(.name)\n  └─ Coste Mensual: \(.monthlyCost) USD\n  └─ Componentes:\n" + (.costComponents[] | "     - \(.name): \(.monthlyCost) USD (\(.unit))")' /tmp/infracost.json || echo "Ninguno."
           
           echo ""
           echo "--------------------------------------------------------------------"
-          echo "RECURSOS GRATUITOS DETECTADOS (COSTE $0.00):"
+          echo "RECURSOS GRATUITOS DETECTADOS (COSTE USD 0.00):"
           echo "--------------------------------------------------------------------"
           
-          # Filtrar y listar los recursos que valen exactamente $0 o están vacíos
-          jq -r '.projects[0].breakdown.resources[] | select((.monthlyCost | tonumber) == 0) | "✔ \(.name) ($0.00)"' /tmp/infracost.json || echo "Ninguno."
+          # Listar los recursos que valen exactamente 0
+          jq -r '.projects[0].breakdown.resources[] | select((.monthlyCost | tonumber) == 0) | "✔ \(.name) (USD 0.00)"' /tmp/infracost.json || echo "Ninguno."
           
           echo ""
           echo "===================================================================="
-
       # 5. Publicar o actualizar el comentario en la Pull Request
       - name: Post Infracost comment
         env:
