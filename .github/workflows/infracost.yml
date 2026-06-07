@@ -61,10 +61,12 @@ jobs:
         with:
           api-key: ${{ secrets.INFRACOST_API_KEY }}
 
-      # 4. Procesar el plan y desgranar los recursos en ESPAÑOL directamente en la consola
+      # 4. Procesar el plan y desgranar los recursos en ESPAÑOL directamente en la consola (Moneda EUR)
       - name: Mostrar costes en consola (Castellano & Desglosado)
+        env:
+          INFRACOST_CURRENCY: EUR # Fuerza a Infracost a usar Euros en todo el proceso
         run: |
-          # 1. Generar el JSON de Infracost base
+          # 1. Generar el JSON de Infracost base en Euros
           infracost breakdown --path tfplan.json --format json --out-file /tmp/infracost.json
           
           echo "===================================================================="
@@ -73,22 +75,22 @@ jobs:
           echo ""
           
           TOTAL_COST=$(jq -r '.totalMonthlyCost // "0.00"' /tmp/infracost.json)
-          echo "COSTE TOTAL ESTIMADO: \$${TOTAL_COST} / mes"
+          echo " COSTE TOTAL ESTIMADO: ${TOTAL_COST} € / mes"
           echo ""
           echo "--------------------------------------------------------------------"
           echo "RECURSOS DE PAGO DETECTADOS (GENERAN COSTE):"
           echo "--------------------------------------------------------------------"
           
-          # Filtrado sin escapes conflictivos para Bash
-          jq -r '.projects[0].breakdown.resources[] | select((.monthlyCost | tonumber) > 0) | "• \(.name)\n  └─ Coste Mensual: \(.monthlyCost) USD\n  └─ Componentes:\n" + (.costComponents[] | "     - \(.name): \(.monthlyCost) USD (\(.unit))")' /tmp/infracost.json || echo "Ninguno."
+          # Extraer recursos con coste mayor a 0
+          jq -r '.projects[0].breakdown.resources[] | select((.monthlyCost | tonumber) > 0) | "• \(.name)\n  └─ Coste Mensual: \(.monthlyCost) €\n  └─ Componentes:\n" + (.costComponents[] | "     - \(.name): \(.monthlyCost) € (\(.unit))")' /tmp/infracost.json || echo "Ninguno."
           
           echo ""
           echo "--------------------------------------------------------------------"
-          echo "RECURSOS GRATUITOS DETECTADOS (COSTE USD 0.00):"
+          echo "RESTO DE RECURSOS CREADOS (GRATUITOS - 0.00 €):"
           echo "--------------------------------------------------------------------"
           
-          # Listar los recursos que valen exactamente 0
-          jq -r '.projects[0].breakdown.resources[] | select((.monthlyCost | tonumber) == 0) | "✔ \(.name) (USD 0.00)"' /tmp/infracost.json || echo "Ninguno."
+          # Extraer la lista completa de recursos identificados como gratis por Infracost
+          jq -r '.projects[0].breakdown.freeResources[] | "✔ \(.name) (0.00 €)"' /tmp/infracost.json || echo "Ninguno."
           
           echo ""
           echo "===================================================================="
