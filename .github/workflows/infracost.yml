@@ -15,7 +15,7 @@ jobs:
       - name: Checkout código
         uses: actions/checkout@v4
 
-      # 1. Configurar Infracost CLI
+      # 1. Instalar y configurar el CLI de Infracost
       - name: Setup Infracost
         uses: infracost/actions/setup@v3
         with:
@@ -25,7 +25,7 @@ jobs:
       - name: Generate Infracost JSON
         run: infracost breakdown --path . --format json --out-file /tmp/infracost.json
 
-      # 3. Publicar el comentario en la Pull Request (Ruta corregida)
+      # 3. Publicar el comentario usando el REPOSITORIO ESPECÍFICO de comentarios
       - name: Post Infracost comment
         uses: infracost/actions/comment@v3
         with:
