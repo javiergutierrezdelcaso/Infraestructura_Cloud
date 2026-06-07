@@ -11,6 +11,9 @@ jobs:
     name: Infracost
     runs-on: ubuntu-latest
 
+    permissions:
+      pull-requests: write # Obligatorio para que el token pueda escribir el comentario
+
     steps:
       - name: Checkout código
         uses: actions/checkout@v4
@@ -25,9 +28,13 @@ jobs:
       - name: Generate Infracost JSON
         run: infracost breakdown --path . --format json --out-file /tmp/infracost.json
 
-      # 3. Publicar el comentario usando el REPOSITORIO ESPECÍFICO de comentarios
+      # 3. Publicar el comentario usando directamente el CLI nativo (Sin usar uses)
       - name: Post Infracost comment
-        uses: infracost/actions/comment@v3
-        with:
-          path: /tmp/infracost.json
-          behavior: update
+        env:
+          INFRACOST_API_KEY: ${{ secrets.INFRACOST_API_KEY }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          infracost comment github --path /tmp/infracost.json \
+                                   --repo ${{ github.repository }} \
+                                   --pull-request ${{ github.event.pull_request.number }} \
+                                   --behavior update
