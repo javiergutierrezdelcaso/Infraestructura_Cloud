@@ -34,48 +34,23 @@ jobs:
             echo "workspace=TFG-Infraestructura-Azure-Terraform-PRE" >> $GITHUB_OUTPUT
           fi
 
-      # 2. Conectar con la API de Terraform Cloud, esperar al Plan definitivo y descargarlo
+      # 2. Conectar con la API de Terraform Cloud y descargar el JSON del Plan
       - name: Descargar Plan de Terraform Cloud
         id: tf_cloud
         run: |
-          echo "Conectando con Terraform Cloud..."
           WORKSPACE_ID=$(curl -s \
             --header "Authorization: Bearer ${{ secrets.TF_API_TOKEN }}" \
             --header "Content-Type: application/vnd.api+json" \
             "https://app.terraform.io/api/v2/organizations/${{ vars.TF_ORGANIZATION }}/workspaces/${{ steps.entorno.outputs.workspace }}" \
             | jq -r '.data.id')
 
-          if [ -z "$WORKSPACE_ID" ] || [ "$WORKSPACE_ID" == "null" ]; then
-            echo "Error: No se encontró el Workspace ID."
-            exit 1
-          fi
+          RUN_DATA=$(curl -s \
+            --header "Authorization: Bearer ${{ secrets.TF_API_TOKEN }}" \
+            --header "Content-Type: application/vnd.api+json" \
+            "https://app.terraform.io/api/v2/workspaces/${WORKSPACE_ID}/runs?page%5Bsize%5D=1")
+          
+          PLAN_ID=$(echo "$RUN_DATA" | jq -r '.data[0].relationships.plan.data.id')
 
-          echo "Esperando a que el Plan de Terraform Cloud esté listo..."
-          for i in $(seq 1 15); do
-            RUN_DATA=$(curl -s \
-              --header "Authorization: Bearer ${{ secrets.TF_API_TOKEN }}" \
-              --header "Content-Type: application/vnd.api+json" \
-              "https://app.terraform.io/api/v2/workspaces/${WORKSPACE_ID}/runs?page%5Bsize%5D=1")
-            
-            RUN_STATUS=$(echo "$RUN_DATA" | jq -r '.data[0].attributes.status')
-            PLAN_ID=$(echo "$RUN_DATA" | jq -r '.data[0].relationships.plan.data.id')
-            
-            echo "Intento ${i}/15 — Estado actual en TF Cloud: ${RUN_STATUS}"
-
-            # Esperamos a que el estado sea 'planned' o 'planned_and_finished' para asegurarnos que tiene los recursos
-            if [ "${RUN_STATUS}" == "planned" ] || [ "${RUN_STATUS}" == "planned_and_finished" ] || [ "${RUN_STATUS}" == "applied" ]; then
-               echo "¡Plan detectado y listo!"
-               break
-            fi
-            sleep 10
-          done
-
-          if [ -z "$PLAN_ID" ] || [ "$PLAN_ID" == "null" ]; then
-            echo "Error: No se pudo obtener un Plan ID válido de Terraform Cloud."
-            exit 1
-          fi
-
-          echo "Descargando salida JSON del Plan..."
           curl -s -L \
             --header "Authorization: Bearer ${{ secrets.TF_API_TOKEN }}" \
             "https://app.terraform.io/api/v2/plans/${PLAN_ID}/json-output" > tfplan.json
@@ -86,18 +61,37 @@ jobs:
         with:
           api-key: ${{ secrets.INFRACOST_API_KEY }}
 
-      # 4. Procesar el plan y mostrarlo corregido en la consola
-      - name: Mostrar costes en consola
+      # 4. Procesar el plan y desgranar los recursos en ESPAÑOL directamente en la consola
+      - name: Mostrar costes en consola (Castellano & Desglosado)
         run: |
-          echo "===================================================================="
-          echo "   💰 ESTIMACIÓN DE COSTES REALES EN AZURE - ENTORNO: [${{ steps.entorno.outputs.nombre }}] "
-          echo "===================================================================="
-          
-          # 1. Convierte el plan de Terraform Cloud a formato JSON de Infracost
+          # 1. Generar el JSON de Infracost base
           infracost breakdown --path tfplan.json --format json --out-file /tmp/infracost.json
           
-          # 2. CORRECCIÓN: Para imprimir un JSON ya generado en formato tabla, usamos 'output'
-          infracost output --path /tmp/infracost.json --format table
+          echo "===================================================================="
+          echo "   REPORTE FINOPS EN ESPAÑOL - ENTORNO: [${{ steps.entorno.outputs.nombre }}] "
+          echo "===================================================================="
+          echo ""
+          
+          TOTAL_COST=$(jq -r '.totalMonthlyCost // "0.00"' /tmp/infracost.json)
+          echo "COSTE TOTAL ESTIMADO: \$$TOTAL_COST / mes"
+          echo ""
+          echo "--------------------------------------------------------------------"
+          echo "RECURSOS DE PAGO DETECTADOS (GENERAN COSTE):"
+          echo "--------------------------------------------------------------------"
+          
+          # Filtrar y parsear los recursos que valen más de $0
+          jq -r '.projects[0].breakdown.resources[] | select((.monthlyCost | tonumber) > 0) | "• \(.name)\n  └─ Coste Mensual: \$\(.monthlyCost)\n  └─ Componentes:\n" + (.costComponents[] | "     - \(.name): \$\(.monthlyCost) (\(.unit))")' /tmp/infracost.json || echo "Ninguno."
+          
+          echo ""
+          echo "--------------------------------------------------------------------"
+          echo "RECURSOS GRATUITOS DETECTADOS (COSTE $0.00):"
+          echo "--------------------------------------------------------------------"
+          
+          # Filtrar y listar los recursos que valen exactamente $0 o están vacíos
+          jq -r '.projects[0].breakdown.resources[] | select((.monthlyCost | tonumber) == 0) | "✔ \(.name) ($0.00)"' /tmp/infracost.json || echo "Ninguno."
+          
+          echo ""
+          echo "===================================================================="
 
       # 5. Publicar o actualizar el comentario en la Pull Request
       - name: Post Infracost comment
