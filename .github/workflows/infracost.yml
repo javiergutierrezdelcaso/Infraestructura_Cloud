@@ -28,13 +28,13 @@ jobs:
       - name: Generate Infracost JSON
         run: infracost breakdown --path . --format json --out-file /tmp/infracost.json
 
-      # 3. Publicar el comentario usando directamente el CLI nativo (Sin usar uses)
+     # 3. Publicar el comentario usando directamente el CLI nativo con su flag obligatorio
       - name: Post Infracost comment
         env:
           INFRACOST_API_KEY: ${{ secrets.INFRACOST_API_KEY }}
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           infracost comment github --path /tmp/infracost.json \
                                    --repo ${{ github.repository }} \
                                    --pull-request ${{ github.event.pull_request.number }} \
+                                   --github-token ${{ secrets.GITHUB_TOKEN }} \
                                    --behavior update
