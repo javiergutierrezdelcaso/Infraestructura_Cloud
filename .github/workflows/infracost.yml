@@ -7,10 +7,6 @@ on:
       - main
       - 'feature/**'
 
-# Solución definitiva para silenciar las alertas de deprecación del runner
-env:
-  ACTIONS_RUNNER_DEBUG: "false"
-
 jobs:
   infracost_tfc:
     name: Analizar Costes ${{ github.base_ref == 'main' && 'PRO' || 'PRE' }}
@@ -59,11 +55,14 @@ jobs:
             --header "Authorization: Bearer ${{ secrets.TF_API_TOKEN }}" \
             "https://app.terraform.io/api/v2/plans/${PLAN_ID}/json-output" > tfplan.json
 
-      # 3. Configurar el CLI de Infracost
-      - name: Setup Infracost
-        uses: infracost/actions/setup@v3
-        with:
-          api-key: ${{ secrets.INFRACOST_API_KEY }}
+      # 3. Instalación NATIVA de Infracost (Evita usar la acción obsoleta de Node 20)
+      - name: Instalar Infracost CLI de forma nativa
+        run: |
+          echo "Descargando e instalando el CLI oficial de Infracost..."
+          curl -fsSL https://raw.githubusercontent.com/infracost/infracost/master/scripts/install.sh | sh
+          
+          echo "Configurando la API Key..."
+          infracost configure set api_key ${{ secrets.INFRACOST_API_KEY }}
 
       # 4. Procesar el plan y desgranar los recursos en ESPAÑOL directamente en la consola (Moneda EUR)
       - name: Mostrar costes en consola (Castellano & Desglosado)
@@ -98,7 +97,7 @@ jobs:
           echo ""
           echo "===================================================================="
 
-      # 5. Publicar o actualizar el comentario en la Pull Request
+      # 5. Publicar o actualizar el comentario en la Pull Request mediante comandos CLI directos
       - name: Post Infracost comment
         env:
           INFRACOST_API_KEY: ${{ secrets.INFRACOST_API_KEY }}
