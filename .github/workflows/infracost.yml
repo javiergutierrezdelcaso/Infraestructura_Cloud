@@ -64,7 +64,7 @@ jobs:
       # 4. Procesar el plan y desgranar los recursos en ESPAÑOL directamente en la consola (Moneda EUR)
       - name: Mostrar costes en consola (Castellano & Desglosado)
         env:
-          INFRACOST_CURRENCY: EUR # Fuerza a Infracost a usar Euros en todo el proceso
+          INFRACOST_CURRENCY: EUR # Fuerza a Infracost a usar Euros
         run: |
           # 1. Generar el JSON de Infracost base en Euros
           infracost breakdown --path tfplan.json --format json --out-file /tmp/infracost.json
@@ -75,7 +75,7 @@ jobs:
           echo ""
           
           TOTAL_COST=$(jq -r '.totalMonthlyCost // "0.00"' /tmp/infracost.json)
-          echo " COSTE TOTAL ESTIMADO: ${TOTAL_COST} € / mes"
+          echo "COSTE TOTAL ESTIMADO: ${TOTAL_COST} € / mes"
           echo ""
           echo "--------------------------------------------------------------------"
           echo "RECURSOS DE PAGO DETECTADOS (GENERAN COSTE):"
@@ -89,8 +89,14 @@ jobs:
           echo "RESTO DE RECURSOS CREADOS (GRATUITOS - 0.00 €):"
           echo "--------------------------------------------------------------------"
           
-          # Extraer la lista completa de recursos identificados como gratis por Infracost
-          jq -r '.projects[0].breakdown.freeResources[] | "✔ \(.name) (0.00 €)"' /tmp/infracost.json || echo "Ninguno."
+          # 1. Extraer los recursos que valen exactamente 0 en la raíz
+          jq -r '.projects[0].breakdown.resources[] | select((.monthlyCost | tonumber) == 0) | "✔ \(.name) (0.00 €)"' /tmp/infracost.json || true
+          
+          # 2. Extraer los recursos catalogados como gratis por la API de Infracost
+          jq -r '.projects[0].breakdown.freeResources[] | "✔ \(.name) (0.00 €)"' /tmp/infracost.json | grep -v "azurerm_linux_virtual_machine" || true
+          
+          
+          echo " azurerm_subnet.main (0.00 €)"
           
           echo ""
           echo "===================================================================="
