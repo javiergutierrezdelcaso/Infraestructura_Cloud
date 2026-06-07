@@ -1,0 +1,34 @@
+name: Infracost — Previsión de Costes
+
+on:
+  pull_request:
+    branches:
+      - develop
+      - main
+
+jobs:
+  infracost:
+    name: Infracost
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout código
+        uses: actions/checkout@v4
+
+      # Instala Infracost de manera oficial
+      - name: Setup Infracost
+        uses: infracost/actions/setup@v3
+        with:
+          api-key: ${{ secrets.INFRACOST_API_KEY }}
+
+      # Genera el desglose leyendo tus archivos .tf locales 
+      # (Infracost se salta los bloques de backend de Terraform Cloud para calcular el coste estimativo)
+      - name: Generate Infracost JSON
+        run: Infracost breakdown --path . --format json --out-file /tmp/infracost.json
+
+      # Publica el coste directamente como un comentario en la Pull Request de GitHub
+      - name: Post Infracost comment
+        uses: infracost/actions/comment@v3
+        with:
+          path: /tmp/infracost.json
+          behavior: update # Actualiza el comentario si subes más commits a la PR
