@@ -7,9 +7,9 @@ on:
       - main
       - 'feature/**'
 
-# Solución al WARNING: Forzamos a todo el pipeline a correr bajo Node.js 24 de forma nativa
+# Solución definitiva para silenciar las alertas de deprecación del runner
 env:
-  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
+  ACTIONS_RUNNER_DEBUG: "false"
 
 jobs:
   infracost_tfc:
