@@ -8,7 +8,6 @@ mediante **Terraform** y la configuración de servidores mediante **Ansible**,
 integrados en pipelines CI/CD que se disparan automáticamente con cada cambio en el repositorio.
 
 
-
 ---
 
 ## Arquitectura
