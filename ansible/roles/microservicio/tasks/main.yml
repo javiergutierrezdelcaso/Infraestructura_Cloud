@@ -36,7 +36,7 @@
     virtualenv: "{{ app_dir }}/venv"
     state: present
 
-- name: Crear servicio systemd con variable ENTORNO
+- name: Crear servicio systemd para EcoAnalyzer
   ansible.builtin.copy:
     dest: /etc/systemd/system/microservicio.service
     mode: "0644"
@@ -44,17 +44,16 @@
       [Unit]
       Description=EcoAnalyzer — Microservicio FastAPI TFG
       After=network.target
-
       [Service]
       User={{ app_user }}
       WorkingDirectory={{ app_dir }}
       Environment=ENTORNO={{ entorno_tipo }}
-      ExecStart={{ app_dir }}/venv/bin/uvicorn main:app --host 0.0.0.0 --port {{ app_port }}
+      Environment=KEY_VAULT_URI={{ key_vault_uri }}
+      ExecStart={{ app_dir }}/venv/bin/uvicorn main:app --host 127.0.0.1 --port {{ app_port }}
       Restart=always
       RestartSec=5
       StandardOutput=journal
       StandardError=journal
-
       [Install]
       WantedBy=multi-user.target
 
