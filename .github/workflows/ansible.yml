@@ -11,10 +11,12 @@ jobs:
     name: Configurar VM ${{ github.ref_name == 'main' && 'PRO' || 'PRE' }}
     runs-on: ubuntu-latest
     environment: ${{ github.ref_name == 'main' && 'pro' || 'pre' }}
-
+    env:
+      FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
+      ACTIONS_ALLOW_USE_UNSECURE_NODE_VERSION: "true"
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       # 1. Determinar entorno según rama
       - name: Determinar entorno

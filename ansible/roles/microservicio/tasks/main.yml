@@ -54,6 +54,7 @@
       User={{ app_user }}
       WorkingDirectory={{ app_dir }}
       Environment=ENTORNO={{ entorno_tipo }}
+      Environment=KEY_VAULT_URI={{ key_vault_uri }}
       ExecStart={{ app_dir }}/venv/bin/uvicorn main:app --host 127.0.0.1 --port 8000
       Restart=always
       RestartSec=5

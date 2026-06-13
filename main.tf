@@ -64,18 +64,6 @@ resource "azurerm_network_security_group" "vm" {
     destination_address_prefix = "*"
   }
 
-  security_rule {
-    name                       = "allow-http-fastapi"
-    priority                   = 110
-    direction                  = "Inbound"
-    access                     = "Allow"
-    protocol                   = "Tcp"
-    source_port_range          = "*"
-    destination_port_range     = "8000"
-    source_address_prefix      = "*"
-    destination_address_prefix = "*"
-  }
-
   #  AÑADIR las dos reglas nuevas de Nginx
   security_rule {
     name                       = "allow-http-nginx"
@@ -180,4 +168,9 @@ resource "azurerm_key_vault" "main" {
       "Get", "List", "Set", "Delete", "Purge", "Recover"
     ]
   }
+}
+resource "azurerm_key_vault_secret" "app_secret" {
+  name         = "eco-api-secret"
+  value        = "super-secret-value-${var.environment}"
+  key_vault_id = azurerm_key_vault.main.id
 }
