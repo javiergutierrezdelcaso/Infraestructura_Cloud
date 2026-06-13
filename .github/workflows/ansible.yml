@@ -154,4 +154,5 @@ jobs:
             -e "app_user=azureuser \
                 app_dir=/opt/microservicio \
                 app_port=8000 \
-                entorno_tipo=${{ steps.entorno.outputs.nombre }}"
+                entorno_tipo=${{ steps.entorno.outputs.nombre }} \
+                key_vault_uri=${{ steps.kv_output.outputs.kv_uri }}"
