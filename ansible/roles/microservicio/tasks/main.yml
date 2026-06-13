@@ -49,18 +49,16 @@
       [Unit]
       Description=EcoAnalyzer — Microservicio FastAPI TFG
       After=network.target
-
       [Service]
       User={{ app_user }}
       WorkingDirectory={{ app_dir }}
       Environment=ENTORNO={{ entorno_tipo }}
       Environment=KEY_VAULT_URI={{ key_vault_uri }}
-      ExecStart={{ app_dir }}/venv/bin/uvicorn main:app --host 127.0.0.1 --port 8000
+      ExecStart={{ app_dir }}/venv/bin/uvicorn main:app --host 127.0.0.1 --port {{ app_port }}
       Restart=always
       RestartSec=5
       StandardOutput=journal
       StandardError=journal
-
       [Install]
       WantedBy=multi-user.target
 
