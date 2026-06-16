@@ -183,3 +183,7 @@ resource "azurerm_key_vault_secret" "app_secret" {
 
   depends_on = [azurerm_key_vault.main]
 }
+import {
+  to = azurerm_key_vault_secret.app_secret
+  id = "https://kv-tfg-pre.vault.azure.net/secrets/eco-api-secret"
+}
