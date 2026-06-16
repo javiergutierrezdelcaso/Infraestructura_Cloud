@@ -159,8 +159,8 @@ resource "azurerm_key_vault" "main" {
   sku_name                    = "standard"
   tags                        = azurerm_resource_group.main.tags
 
-  soft_delete_retention_days  = 7        # mínimo permitido por Azure
-  purge_protection_enabled    = false    # permite purgar sin esperar 90 días
+  soft_delete_retention_days  = 7
+  purge_protection_enabled    = false
 
   access_policy {
     tenant_id = data.azurerm_client_config.current.tenant_id
@@ -171,27 +171,11 @@ resource "azurerm_key_vault" "main" {
     ]
   }
 }
-# 1. En lugar de CREAR el secreto, le decimos a Terraform que lo LEA.
-# Al ser un 'data source', da igual la versión que tenga en Azure, la lee dinámicamente y NO da error de "already exists".
+
+# ─────────────────────────────────────────────
+# Lectura dinámica del secreto (Evita el "Already Exists")
+# ─────────────────────────────────────────────
 data "azurerm_key_vault_secret" "app_secret" {
   name         = "eco-api-secret"
   key_vault_id = azurerm_key_vault.main.id
-}
-
-# 2. Si tu código necesita que el secreto tenga el valor "eco-secret-${var.environment}" 
-# obligatoriamente y quieres asegurarte de que se actualice sin romper el pipeline:
-resource "azurerm_key_vault_secret" "app_secret_managed" {
-  name         = "eco-api-secret"
-  value        = "eco-secret-${var.environment}"
-  key_vault_id = azurerm_key_vault.main.id
-
-  lifecycle {
-    create_before_destroy = true
-    ignore_changes        = [value]
-  }
-
-  # ESTO ES EL TRUCO: Solo intentará gestionarlo si el data source dice que no existe 
-  # (Como ya existe en PRE y PRO, Terraform ignorará este recurso y usará el 'data')
-  count = 0 
-}
 }
