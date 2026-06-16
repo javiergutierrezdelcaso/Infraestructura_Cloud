@@ -176,32 +176,18 @@ resource "azurerm_key_vault_secret" "app_secret" {
   value        = "eco-secret-${var.environment}"
   key_vault_id = azurerm_key_vault.main.id
 
+  # ESTO ES LO QUE SALVA EL PIPELINE:
   lifecycle {
     create_before_destroy = true
-    ignore_changes        = [value]
+    
+    # Le decimos a Terraform que ignore ABSOLUTAMENTE TODO lo que cambie fuera.
+    # No le importará el valor, ni la versión que genere Azure, ni el ID dinámico.
+    ignore_changes = [
+      value,
+      version,
+      id
+    ]
   }
 
   depends_on = [azurerm_key_vault.main]
-}
-# ─────────────────────────────────────────────
-# Bloque de importación dinámico por entorno
-# ─────────────────────────────────────────────
-locals {
-  secret_imports = {
-    "pre" = {
-      vault_name = "kv-tfg-pre"
-      version    = "54449e810aa14a9284e0576f4fbb68f4"
-    }
-    "pro" = {
-      vault_name = "kv-tfg-pro"
-      version    = "bcadcfd8d66746e8a01ee62b4f70f278"
-    }
-  }
-}
-
-import {
-  for_each = { for k, v in local.secret_imports : k => v if k == var.environment }
-
-  to = azurerm_key_vault_secret.app_secret
-  id = "https://${each.value.vault_name}.vault.azure.net/secrets/eco-api-secret/${each.value.version}"
 }
