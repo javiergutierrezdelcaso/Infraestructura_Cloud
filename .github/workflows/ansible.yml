@@ -11,10 +11,12 @@ jobs:
     name: Configurar VM ${{ github.ref_name == 'main' && 'PRO' || 'PRE' }}
     runs-on: ubuntu-latest
     environment: ${{ github.ref_name == 'main' && 'pro' || 'pre' }}
-
+    env:
+      FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
+      ACTIONS_ALLOW_USE_UNSECURE_NODE_VERSION: "true"
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       # 1. Determinar entorno según rama
       - name: Determinar entorno
@@ -123,8 +125,8 @@ jobs:
             ansible_python_interpreter=/usr/bin/python3
           EOF2
           echo "Inventario creado para IP: ${{ steps.tf_output.outputs.vm_ip }}"
-          
-      # 8.   Obtener key_vault_uri desde Terraform Cloud 
+
+      # 8. Crear inventario dinámico con la IP descubierta
       - name: Obtener key_vault_uri desde Terraform Cloud
         id: kv_output
         run: |
@@ -143,7 +145,7 @@ jobs:
       
           echo "kv_uri=${KV_URI}" >> $GITHUB_OUTPUT
           echo "Key Vault URI: ${KV_URI}"
-          
+
       # 9. Ejecutar playbook — pasa entorno_tipo para el badge PRE/PRO
       - name: Ejecutar playbook Ansible en ${{ steps.entorno.outputs.nombre }}
         run: |
@@ -152,4 +154,5 @@ jobs:
             -e "app_user=azureuser \
                 app_dir=/opt/microservicio \
                 app_port=8000 \
-                entorno_tipo=${{ steps.entorno.outputs.nombre }}"
+                entorno_tipo=${{ steps.entorno.outputs.nombre }} \
+                key_vault_uri=${{ steps.kv_output.outputs.kv_uri }}"

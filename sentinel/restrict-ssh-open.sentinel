@@ -1,0 +1,44 @@
+# restrict-ssh-open.sentinel
+# Política: advierte si el puerto SSH (22) está abierto a 0.0.0.0/0
+# Nivel: advisory (informa sin bloquear) — en producción usar enforcing
+
+import "tfplan/v2" as tfplan
+
+# Obtener todos los NSG del plan
+nsgs = filter tfplan.resource_changes as _, rc {
+    rc.type is "azurerm_network_security_group" and
+    rc.mode is "managed" and
+    (rc.change.actions contains "create" or rc.change.actions contains "update")
+}
+
+# Función que comprueba si una regla expone SSH globalmente
+ssh_open_to_world = func(nsg) {
+    rules = nsg.change.after.security_rule else []
+    for rules as rule {
+        if rule.destination_port_range == "22" and
+           rule.access == "Allow" and
+           rule.direction == "Inbound" and
+           (rule.source_address_prefix == "*" or
+            rule.source_address_prefix == "0.0.0.0/0" or
+            rule.source_address_prefix == "Internet") {
+            return true
+        }
+    }
+    return false
+}
+
+# Evaluar cada NSG
+violations = filter nsgs as _, nsg {
+    ssh_open_to_world(nsg)
+}
+
+# Mensaje informativo por cada violación
+for violations as addr, nsg {
+    print("ADVERTENCIA:", addr,
+          "tiene el puerto SSH (22) abierto a Internet.",
+          "En producción debería restringirse a IPs conocidas o usar Azure Bastion.")
+}
+
+# En advisory: main siempre true (no bloquea)
+# Para cambiar a enforcing: cambiar a -> main = rule { length(violations) == 0 }
+main = rule { true }

@@ -4,7 +4,7 @@
     update_cache: true
     cache_valid_time: 3600
 
-- name: Instalar paquetes base
+- name: Instalar paquetes base y Nginx
   ansible.builtin.apt:
     name:
       - python3
@@ -12,6 +12,7 @@
       - python3-venv
       - git
       - curl
+      - nginx
     state: present
 
 - name: Crear directorio de la aplicación
@@ -36,6 +37,10 @@
     virtualenv: "{{ app_dir }}/venv"
     state: present
 
+# ─────────────────────────────────────────────
+# Servicio systemd para FastAPI/Uvicorn
+# Escucha solo en localhost:8000 (Nginx hace de proxy)
+# ─────────────────────────────────────────────
 - name: Crear servicio systemd para EcoAnalyzer
   ansible.builtin.copy:
     dest: /etc/systemd/system/microservicio.service
@@ -57,11 +62,66 @@
       [Install]
       WantedBy=multi-user.target
 
+# ─────────────────────────────────────────────
+# Configuración de Nginx como proxy inverso
+# ─────────────────────────────────────────────
+- name: Crear configuración de Nginx para EcoAnalyzer
+  ansible.builtin.copy:
+    dest: /etc/nginx/sites-available/ecoanalyzer
+    mode: "0644"
+    content: |
+      server {
+          listen 80;
+          server_name _;
+
+          # Cabeceras de seguridad
+          add_header X-Frame-Options "SAMEORIGIN";
+          add_header X-Content-Type-Options "nosniff";
+          add_header X-XSS-Protection "1; mode=block";
+
+          location / {
+              proxy_pass         http://127.0.0.1:8000;
+              proxy_http_version 1.1;
+              proxy_set_header   Host              $host;
+              proxy_set_header   X-Real-IP         $remote_addr;
+              proxy_set_header   X-Forwarded-For   $proxy_add_x_forwarded_for;
+              proxy_set_header   X-Forwarded-Proto $scheme;
+              proxy_read_timeout 60s;
+          }
+
+          # Health check directo sin pasar por FastAPI
+          location /nginx-health {
+              return 200 "nginx ok\n";
+              add_header Content-Type text/plain;
+          }
+      }
+
+- name: Activar sitio EcoAnalyzer en Nginx
+  ansible.builtin.file:
+    src: /etc/nginx/sites-available/ecoanalyzer
+    dest: /etc/nginx/sites-enabled/ecoanalyzer
+    state: link
+
+- name: Eliminar sitio default de Nginx
+  ansible.builtin.file:
+    path: /etc/nginx/sites-enabled/default
+    state: absent
+
+- name: Verificar configuración de Nginx
+  ansible.builtin.command: nginx -t
+  changed_when: false
+
 - name: Recargar systemd
   ansible.builtin.systemd:
     daemon_reload: true
 
-- name: Habilitar y arrancar servicio
+- name: Habilitar y arrancar Nginx
+  ansible.builtin.systemd:
+    name: nginx
+    enabled: true
+    state: restarted
+
+- name: Habilitar y arrancar servicio EcoAnalyzer
   ansible.builtin.systemd:
     name: microservicio
     enabled: true

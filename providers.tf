@@ -9,12 +9,10 @@ terraform {
   }
 
   # Terraform Cloud — conecta este repo vía VCS Provider
-  # Sustituye "TU_ORGANIZACION" y "TU_WORKSPACE" por los tuyos de Terraform Cloud
   cloud {
-    organization = "TU_ORGANIZACION"
-
+    organization = "Javier-Gutierrez-TFG-DevOps"
     workspaces {
-      name = "tfg-infraestructura"
+      name = "TFG-Infraestructura-Azure-Terraform"
     }
   }
 }

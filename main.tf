@@ -64,19 +64,31 @@ resource "azurerm_network_security_group" "vm" {
     destination_address_prefix = "*"
   }
 
+  #  AÑADIR las dos reglas nuevas de Nginx
   security_rule {
-    name                       = "allow-http-fastapi"
-    priority                   = 110
+    name                       = "allow-http-nginx"
+    priority                   = 120
     direction                  = "Inbound"
     access                     = "Allow"
     protocol                   = "Tcp"
     source_port_range          = "*"
-    destination_port_range     = "8000"
+    destination_port_range     = "80"
+    source_address_prefix      = "*"
+    destination_address_prefix = "*"
+  }
+
+  security_rule {
+    name                       = "allow-https-nginx"
+    priority                   = 130
+    direction                  = "Inbound"
+    access                     = "Allow"
+    protocol                   = "Tcp"
+    source_port_range          = "*"
+    destination_port_range     = "443"
     source_address_prefix      = "*"
     destination_address_prefix = "*"
   }
 }
-
 # ─────────────────────────────────────────────
 # Interfaz de red de la VM
 # ─────────────────────────────────────────────
@@ -140,14 +152,16 @@ resource "azurerm_linux_virtual_machine" "main" {
 data "azurerm_client_config" "current" {}
 
 resource "azurerm_key_vault" "main" {
-  name                = var.key_vault_name # Debe ser único globalmente
-  location            = azurerm_resource_group.main.location
-  resource_group_name = azurerm_resource_group.main.name
-  tenant_id           = data.azurerm_client_config.current.tenant_id
-  sku_name            = "standard"
-  tags                = azurerm_resource_group.main.tags
+  name                        = var.key_vault_name
+  location                    = azurerm_resource_group.main.location
+  resource_group_name         = azurerm_resource_group.main.name
+  tenant_id                   = data.azurerm_client_config.current.tenant_id
+  sku_name                    = "standard"
+  tags                        = azurerm_resource_group.main.tags
 
-  # Permite que el Service Principal de Terraform gestione secretos
+  soft_delete_retention_days  = 7        # mínimo permitido por Azure
+  purge_protection_enabled    = false    # permite purgar sin esperar 90 días
+
   access_policy {
     tenant_id = data.azurerm_client_config.current.tenant_id
     object_id = data.azurerm_client_config.current.object_id
@@ -156,4 +170,20 @@ resource "azurerm_key_vault" "main" {
       "Get", "List", "Set", "Delete", "Purge", "Recover"
     ]
   }
+}
+resource "azurerm_key_vault_secret" "app_secret" {
+  name         = "eco-api-secret"
+  value        = "eco-secret-${var.environment}"
+  key_vault_id = azurerm_key_vault.main.id
+
+  lifecycle {
+    create_before_destroy = true
+    ignore_changes        = [value]
+  }
+
+  depends_on = [azurerm_key_vault.main]
+}
+import {
+  to = azurerm_key_vault_secret.app_secret
+  id = "https://kv-tfg-pre.vault.azure.net/secrets/eco-api-secret/54449e810aa14a9284e0576f4fbb68f4"
 }
