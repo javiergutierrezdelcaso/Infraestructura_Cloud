@@ -9,7 +9,6 @@ integrados en pipelines CI/CD que se disparan automáticamente con cada cambio
 en el repositorio. Incluye gestión segura de secretos mediante **Azure Key Vault** 
 y gobernanza de infraestructura mediante **políticas Sentinel**.
 
-
 ---
 
 ## Arquitectura
