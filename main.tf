@@ -173,6 +173,13 @@ resource "azurerm_key_vault" "main" {
 }
 resource "azurerm_key_vault_secret" "app_secret" {
   name         = "eco-api-secret"
-  value        = "super-secret-value-${var.environment}"
+  value        = "eco-secret-${var.environment}"
   key_vault_id = azurerm_key_vault.main.id
+
+  lifecycle {
+    create_before_destroy = true
+    ignore_changes        = [value]
+  }
+
+  depends_on = [azurerm_key_vault.main]
 }
