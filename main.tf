@@ -183,7 +183,9 @@ resource "azurerm_key_vault_secret" "app_secret" {
 
   depends_on = [azurerm_key_vault.main]
 }
-# 1. Definimos un mapa con los datos exactos de cada entorno
+# ─────────────────────────────────────────────
+# Bloque de importación dinámico por entorno
+# ─────────────────────────────────────────────
 locals {
   secret_imports = {
     "pre" = {
@@ -197,9 +199,8 @@ locals {
   }
 }
 
-# 2. El bloque import dinámico que se adapta al pipeline que esté corriendo
 import {
-  for_each = { for k, v in local.secret_imports : k => v if k == var.entorno }
+  for_each = { for k, v in local.secret_imports : k => v if k == var.environment }
 
   to = azurerm_key_vault_secret.app_secret
   id = "https://${each.value.vault_name}.vault.azure.net/secrets/eco-api-secret/${each.value.version}"
