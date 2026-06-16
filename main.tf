@@ -186,4 +186,5 @@ resource "azurerm_key_vault_secret" "app_secret" {
 import {
   to = azurerm_key_vault_secret.app_secret
   id = "https://kv-tfg-pre.vault.azure.net/secrets/eco-api-secret/54449e810aa14a9284e0576f4fbb68f4"
+  id = "https://kv-tfg-pro.vault.azure.net/secrets/eco-api-secret/bcadcfd8d66746e8a01ee62b4f70f278"
 }
