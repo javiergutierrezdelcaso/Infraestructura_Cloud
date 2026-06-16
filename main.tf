@@ -159,8 +159,8 @@ resource "azurerm_key_vault" "main" {
   sku_name                    = "standard"
   tags                        = azurerm_resource_group.main.tags
 
-  soft_delete_retention_days  = 7        # mínimo permitido por Azure
-  purge_protection_enabled    = false    # permite purgar sin esperar 90 días
+  soft_delete_retention_days  = 7
+  purge_protection_enabled    = false
 
   access_policy {
     tenant_id = data.azurerm_client_config.current.tenant_id
@@ -171,19 +171,11 @@ resource "azurerm_key_vault" "main" {
     ]
   }
 }
-resource "azurerm_key_vault_secret" "app_secret" {
+
+# ─────────────────────────────────────────────
+# Lectura dinámica del secreto (Evita el "Already Exists")
+# ─────────────────────────────────────────────
+data "azurerm_key_vault_secret" "app_secret" {
   name         = "eco-api-secret"
-  value        = "eco-secret-${var.environment}"
   key_vault_id = azurerm_key_vault.main.id
-
-  lifecycle {
-    create_before_destroy = true
-    ignore_changes        = [value]
-  }
-
-  depends_on = [azurerm_key_vault.main]
-}
-import {
-  to = azurerm_key_vault_secret.app_secret
-  id = "https://kv-tfg-pre.vault.azure.net/secrets/eco-api-secret/54449e810aa14a9284e0576f4fbb68f4"
 }
