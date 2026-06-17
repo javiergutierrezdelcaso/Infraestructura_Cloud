@@ -172,10 +172,24 @@ resource "azurerm_key_vault" "main" {
   }
 }
 
-# ─────────────────────────────────────────────
-# Lectura dinámica del secreto (Evita el "Already Exists")
-# ─────────────────────────────────────────────
+# Crea el secreto si no existe
+resource "azurerm_key_vault_secret" "app_secret" {
+  name         = "eco-api-secret"
+  value        = "eco-secret-${var.environment}"
+  key_vault_id = azurerm_key_vault.main.id
+
+  lifecycle {
+    ignore_changes        = [value]
+    create_before_destroy = true
+  }
+
+  depends_on = [azurerm_key_vault.main]
+}
+
+# Lee el secreto para exponerlo como output (funciona aunque ya existiera)
 data "azurerm_key_vault_secret" "app_secret" {
   name         = "eco-api-secret"
   key_vault_id = azurerm_key_vault.main.id
+
+  depends_on = [azurerm_key_vault_secret.app_secret]
 }
