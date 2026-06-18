@@ -172,19 +172,28 @@ resource "azurerm_key_vault" "main" {
   }
 }
 
-# 1. Bloque DATA: Terraform va a Azure, busca el secreto por su nombre
-# y obtiene automáticamente la última versión activa.
+# 1. Tu bloque DATA que ya funciona perfectamente
 data "azurerm_key_vault_secret" "app_secret" {
   name         = "eco-api-secret"
   key_vault_id = azurerm_key_vault.main.id
 }
 
-# 2. Ejemplo de cómo usarlo en otros recursos:
-# Cuando invocas ".value", Terraform extrae el valor de la versión más reciente.
+# 2. El recurso App Service corregido con sus argumentos obligatorios
 resource "azurerm_linux_web_app" "example" {
   name                = "eco-app-${var.environment}"
-  # ... resto de tu configuración ...
+  
+  # 🟢 SOLUCIÓN A LOS ERRORES:
+  # Apunta al mismo grupo de recursos y ubicación que tu Key Vault (u otros que tengas creados)
+  resource_group_name = azurerm_resource_group.main.name
+  location            = azurerm_resource_group.main.location
+  
+  # Necesitas tener un azurerm_service_plan creado en tu código para poner su ID aquí
+  service_plan_id     = azurerm_service_plan.main.id
 
+  # El bloque site_config es obligatorio (aunque esté vacío)
+  site_config {}
+
+  # Tus variables de entorno con el secreto dinámico
   app_settings = {
     "API_SECRET" = data.azurerm_key_vault_secret.app_secret.value
   }
