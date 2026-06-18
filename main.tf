@@ -172,53 +172,13 @@ resource "azurerm_key_vault" "main" {
   }
 }
 
-# Crea el secreto si no existe
-resource "azurerm_key_vault_secret" "app_secret" {
-  name         = "eco-api-secret"
-  value        = "eco-secret-${var.environment}"
-  key_vault_id = azurerm_key_vault.main.id
-
-  lifecycle {
-    ignore_changes        = [value]
-    create_before_destroy = true
-  }
-
-  depends_on = [azurerm_key_vault.main]
-}
-
-# 1. Creamos el secreto por fuera de Terraform SÓLO si no existe
-resource "null_resource" "create_secret_if_not_exists" {
-  triggers = {
-    key_vault_id = azurerm_key_vault.main.id
-  }
-
-  provisioner "local-exec" {
-    command = <<-EOT
-      SECRET=$(az keyvault secret show \
-        --vault-name ${azurerm_key_vault.main.name} \
-        --name eco-api-secret \
-        --query name -o tsv 2>/dev/null || echo "")
-
-      if [ -z "$SECRET" ]; then
-        az keyvault secret set \
-          --vault-name ${azurerm_key_vault.main.name} \
-          --name eco-api-secret \
-          --value "eco-secret-${var.environment}"
-        echo "Secreto creado."
-      else
-        echo "Secreto ya existe, omitiendo."
-      fi
-    EOT
-  }
-
-  depends_on = [azurerm_key_vault.main]
-}
-
-# 2. Leemos el secreto de forma segura (ya sea el viejo o el recién creado)
+# ─────────────────────────────────────────────
+# BLOQUE NUEVO: Lectura dinámica del secreto
+# ─────────────────────────────────────────────
 data "azurerm_key_vault_secret" "app_secret" {
   name         = "eco-api-secret"
   key_vault_id = azurerm_key_vault.main.id
 
-  # CRUCIAL: Esperar a que el script de arriba termine
-  depends_on = [null_resource.create_secret_if_not_exists]
+  # Espera obligatoriamente a que el Key Vault esté listo antes de consultar
+  depends_on = [azurerm_key_vault.main]
 }
