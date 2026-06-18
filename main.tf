@@ -192,4 +192,6 @@ resource "azurerm_key_vault_secret" "app_secret" {
 data "azurerm_key_vault_secret" "app_secret" {
   name         = "eco-api-secret"
   key_vault_id = azurerm_key_vault.main.id
+
+  depends_on = [azurerm_key_vault.main]
 }
