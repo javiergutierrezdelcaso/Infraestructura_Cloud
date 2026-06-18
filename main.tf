@@ -187,9 +187,18 @@ resource "azurerm_key_vault_secret" "app_secret" {
 }
 
 # ─────────────────────────────────────────────
-# Lectura dinámica del secreto (Evita el "Already Exists")
+# Verifica si el secreto existe antes de leerlo
 # ─────────────────────────────────────────────
+variable "secret_exists" {
+  description = "Indica si el secreto eco-api-secret ya existe en Key Vault"
+  type        = bool
+  default     = false
+}
+
 data "azurerm_key_vault_secret" "app_secret" {
+  count        = var.secret_exists ? 1 : 0
   name         = "eco-api-secret"
   key_vault_id = azurerm_key_vault.main.id
+
+  depends_on = [azurerm_key_vault.main]
 }
